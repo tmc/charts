@@ -1,0 +1,46 @@
+global:
+  scrape_interval:     15s # By default, scrape targets every 15 seconds.
+  evaluation_interval: 15s # By default, scrape targets every 15 seconds.
+rule_files:
+  - /etc/prometheus/rules
+  - /etc/prometheus/alerts
+scrape_configs:
+  # The job name is added as a label `job=<job_name>` to any timeseries scraped from this config.
+  - job_name: 'prometheus'
+    # Override the global default and scrape targets from this job every 5 seconds.
+    scrape_interval: 5s
+    # metrics_path defaults to '/metrics'
+    # scheme defaults to 'http'.
+    static_configs:
+      - targets: ['localhost:9090']
+  - job_name: 'node_exporter'
+    static_configs:
+      - targets: ['localhost:9100']
+  - job_name: 'pushgateway'
+    scrape_interval: 10s
+    metrics_path: /pushgateway/metrics
+    basic_auth:
+      username: {{.PUSHGATEWAY_USER}}
+      password: {{.PUSHGATEWAY_PASSWORD}}
+    static_configs:
+      - targets: ['{{.PUSHGATEWAY_ENDPOINT}}']
+  - job_name: 'mysqld'
+    scrape_interval: 10s
+    metrics_path: /mysqld_exporter/metrics
+    basic_auth:
+      username: {{.PUSHGATEWAY_USER}}
+      password: {{.PUSHGATEWAY_PASSWORD}}
+    static_configs:
+      - targets: ['{{.PUSHGATEWAY_ENDPOINT}}']
+        labels:
+          alias: db1
+  - job_name: 'mysqld-replica'
+    scrape_interval: 10s
+    metrics_path: /mysqld_exporter_replica/metrics
+    basic_auth:
+      username: {{.PUSHGATEWAY_USER}}
+      password: {{.PUSHGATEWAY_PASSWORD}}
+    static_configs:
+      - targets: ['{{.PUSHGATEWAY_ENDPOINT}}']
+        labels:
+          alias: db2
