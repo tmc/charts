@@ -1,0 +1,75 @@
+apiVersion: extensions/v1beta1
+kind: Deployment
+metadata:
+  name: {{template "fullname" .}}
+  labels:
+    heritage: {{.Release.Service | quote}}
+    release: {{.Release.Name | quote}}
+    chart: "{{.Chart.Name}}-{{.Chart.Version}}"
+spec:
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        app: {{template "fullname" .}}
+        release: {{.Release.Name | quote}}
+    spec:
+      containers:
+      - name: jenkins
+        image: gcr.io/{{.Values.PROJECT}}/jenkins
+        imagePullPolicy: {{default "Always" .Values.pullPolicy}}
+        env:
+          - name: DEIS_BUILDER
+            valueFrom:
+              configMapKeyRef:
+                name: {{template "fullname" .}}
+                key: deis.builder
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - mountPath: /var/jenkins_home
+          name: storage-volume
+        - mountPath: /etc/secrets
+          name: secrets-volume
+        - mountPath: /var/run/docker.sock
+          name: dockersocket
+      - name: fixperms
+        image: alpine
+        args:
+        - /bin/sh
+        - -c
+        - "mkdir /var/jenkins_home/.deis || echo; cp /etc/secrets/jenkins-deis-conf.json /var/jenkins_home/.deis/client.json; chown -R 1000:1000 /var/jenkins_home; cp -rv /var/jenkins_home/.deis /root/; sleep 1000"
+        volumeMounts:
+        - mountPath: /var/jenkins_home
+          name: storage-volume
+        - mountPath: /etc/secrets
+          name: secrets-volume
+      - name: proxy
+        image: "gcr.io/{{.Values.PROJECT}}/nginx-ssl-proxy"
+        ports:
+        - containerPort: 443
+        - containerPort: 80
+        env:
+        - name: TARGET_SERVICE
+          value: "localhost:8080"
+        - name: PASSTHROUGH_LOCATION
+          value: "/github-webhook/"
+        - name: SKIP_AUTHENTICATION_HEADER
+          value: "1"
+        volumeMounts:
+        - mountPath: /etc/secrets
+          name: proxy-secrets-volume
+      volumes:
+        - name: dockersocket
+          hostPath:
+            path: /var/run/docker.sock
+        - name: secrets-volume
+          secret:
+            secretName: {{template "fullname" .}}
+        - name: storage-volume
+          persistentVolumeClaim:
+            claimName: {{template "fullname" .}}
+        - name: proxy-secrets-volume
+          secret:
+            secretName: {{template "proxyname" .}}
+
